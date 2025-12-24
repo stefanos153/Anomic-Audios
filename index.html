@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Anomic Audios</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root{
+      --bg:#0b0f14;--card:#121826;--accent:#4f7cff;--text:#e6e9ef;--muted:#9aa4b2;
+    }
+    *{box-sizing:border-box;font-family:Inter,system-ui,Arial}
+    body{margin:0;background:linear-gradient(120deg,#0b0f14,#0e1422);color:var(--text)}
+    header{padding:20px 30px;display:flex;justify-content:space-between;align-items:center}
+    h1{margin:0;font-size:26px}
+    .btn{background:var(--accent);border:none;color:white;padding:8px 14px;border-radius:10px;cursor:pointer}
+    .btn.ghost{background:transparent;border:1px solid var(--accent)}
+    main{max-width:1100px;margin:auto;padding:20px}
+    .search{display:flex;gap:10px;margin-bottom:20px}
+    input,textarea{flex:1;padding:12px;border-radius:12px;border:none;background:var(--card);color:white}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+    .card{background:var(--card);padding:14px;border-radius:16px;animation:fade .4s ease}
+    .card small{color:var(--muted)}
+    .fav{float:right;cursor:pointer}
+    footer{margin-top:40px;padding:20px;text-align:center;color:var(--muted)}
+    a{color:var(--accent);text-decoration:none}
+    .modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center}
+    .modal>div{background:var(--card);padding:20px;border-radius:16px;max-width:420px;width:100%}
+    @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Anomic Audios</h1>
+  <div id="userArea"></div>
+</header>
+<main>
+  <div class="search">
+    <input id="q" placeholder="Search Roblox audios…" />
+    <button class="btn" onclick="search()">Search</button>
+  </div>
+
+  <div id="adminPanel" style="display:none;margin-bottom:20px">
+    <h3>Admin Panel</h3>
+    <input id="addSingle" placeholder="Song - Artist - ID" />
+    <button class="btn" onclick="addSong()">Add</button>
+    <textarea id="mass" placeholder="Mass import: Song - Artist - ID, Song - Artist - ID"></textarea>
+    <button class="btn" onclick="massAdd()">Mass Import</button>
+  </div>
+
+  <div class="grid" id="results"></div>
+</main>
+
+<footer>
+  <p>Report broken audios on our Discord</p>
+  <p><a href="https://discord.gg/dFvstbSmrn" target="_blank">Discord</a> • <a href="https://www.youtube.com/@anomibetcasino" target="_blank">YouTube</a></p>
+</footer>
+
+<div class="modal" id="authModal">
+  <div>
+    <h3 id="authTitle">Login</h3>
+    <input id="user" placeholder="Username" />
+    <input id="pass" type="password" placeholder="Password" />
+    <button class="btn" onclick="auth()">Submit</button>
+  </div>
+</div>
+
+<script>
+// ===== DATABASE (localStorage) =====
+let songs = JSON.parse(localStorage.getItem('songs')||'[]');
+let users = JSON.parse(localStorage.getItem('users')||'{}');
+let session = JSON.parse(localStorage.getItem('session')||'null');
+
+// preload if empty
+if(songs.length===0){ songs = [
+  {t:'Flashing Lights',a:'Kanye West',id:'97382107059607',by:'system'},
+  {t:'SICKO MODE',a:'Travis Scott',id:'97021488542813',by:'system'},
+  {t:'MEGALOVANIA',a:'Toby Fox',id:'97011641248969',by:'system'}
+]; save(); }
+
+function save(){localStorage.setItem('songs',JSON.stringify(songs));localStorage.setItem('users',JSON.stringify(users));localStorage.setItem('session',JSON.stringify(session));}
+
+// ===== AUTH =====
+function openAuth(){document.getElementById('authModal').style.display='flex'}
+function auth(){
+  let u=user.value,p=pass.value;
+  if(!users[u]) users[u]={p,admin:false,fav:[]};
+  if(users[u].p!==p) return alert('Wrong password');
+  session={u}; save(); location.reload();
+}
+function logout(){session=null;save();location.reload()}
+
+// ===== UI =====
+function renderUser(){
+  let el=userArea;
+  if(!session) el.innerHTML='<button class="btn ghost" onclick="openAuth()">Login / Sign up</button>';
+  else el.innerHTML=`<span>${session.u}</span> <button class='btn ghost' onclick='logout()'>Logout</button>`;
+  if(session && users[session.u].admin) adminPanel.style.display='block';
+}
+
+function search(){
+  let qv=q.value.toLowerCase();
+  let res=songs.filter(s=>s.t.toLowerCase().includes(qv)||s.a.toLowerCase().includes(qv));
+  if(res.length<3) res=[...res,...songs.filter(s=>!res.includes(s)).slice(0,5)];
+  render(res);
+}
+
+function render(list){
+  results.innerHTML='';
+  list.forEach(s=>{
+    let fav = session && users[session.u].fav.includes(s.id);
+    results.innerHTML+=`<div class='card'>
+      <b>${s.t}</b> <span class='fav' onclick="favSong('${s.id}')">${fav?'★':'☆'}</span><br>
+      <small>${s.a}</small><br>
+      <small>ID: ${s.id}</small><br>
+      <small>Added by ${s.by}</small>
+    </div>`;
+  });
+}
+
+function favSong(id){ if(!session) return alert('Login first'); let f=users[session.u].fav; f.includes(id)?f.splice(f.indexOf(id),1):f.push(id); save(); search(); }
+
+// ===== ADMIN =====
+function addSong(){ parse(addSingle.value); }
+function massAdd(){ mass.value.split(',').forEach(parse); }
+function parse(str){
+  let p=str.split('-').map(x=>x.trim()); if(p.length<3) return;
+  songs.push({t:p[0],a:p[1],id:p[2],by:session.u}); save(); search();
+}
+
+renderUser(); render(songs);
+setTimeout(()=>alert('Join our Discord! https://discord.gg/dFvstbSmrn'),500);
+</script>
+</body>
+</html>
